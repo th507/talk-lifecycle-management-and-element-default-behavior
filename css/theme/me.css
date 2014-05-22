@@ -1,0 +1,144 @@
+.cf, [cf] {
+    zoom:1;
+}
+.cf::after, [cf]::after {
+    content:'';
+    display:block;
+    clear:both;
+    height:0;
+    overflow:hidden;
+    visibility:hidden;
+}
+
+html body .reveal {
+    /*Titillium Web, Avenir Next Condensed, */
+    font-family: Helvetica Neue, Lantinghei SC, sans-serif;
+    font-weight: 200;
+}
+.reveal p {
+    letter-spacing: 0;
+}
+.reveal h1, .reveal h2, .reveal h3, .reveal h4, .reveal h5, .reveal h6 {
+    font-family: Vollkorn, Andada, Lantinghei SC, serif;
+    line-height: 1.5em;
+}
+.reveal section a:not(.image) {
+    color: #333;
+}
+.reveal section img {
+    border: none;
+    box-shadow: none;
+}
+.first-slide h1 {
+    font-size: 200px;
+    margin-bottom: 100px;
+}
+.first-slide h3, .first-slide h6 {
+    text-transform: none;
+}
+.first-slide p {
+    padding: 20px 0;
+}
+.first-slide small {
+    letter-spacing: 0.005em;
+}
+.reveal small {
+    vertical-align: middle;
+}
+[small] {
+    font-size: 0.6em;
+}
+
+.reveal code {
+    word-wrap: break-word;      /* IE 5.5-7 */
+    white-space: -moz-pre-wrap; /* Firefox 1.0-2.0 */
+    white-space: pre-wrap;      /* current browsers */
+
+    font-family: Menlo, monospace;
+    line-height: 1.5;
+}
+.reveal code.long {
+    width: 1000px;
+}
+.reveal spread, .reveal [spread] {
+    line-height: 1.6;
+}
+crimson, .reveal [crimson], .reveal .crimson {
+    color: crimson;
+}
+
+bg-crimson, [bg-crimson] {
+    background: crimson;
+    color: white;
+}
+
+border-crimson, .reveal [border-crimson] {
+    border: 2px solid crimson;
+}
+.reveal .slides section .fragment.component {
+    position: relative;
+    opacity: 1;
+    border: 4px solid transparent;
+}
+.reveal .slides section .fragment.component.visible {
+    border: 4px solid crimson;
+}
+
+.reveal .slides section .fragment.component.visible::after {
+    position: absolute;
+    right: 5px;
+    top: 0;
+    content: "组件化目前接管范围";
+    font-size: 0.7em;
+    color: crimson;
+}
+
+.reveal pre {
+    box-shadow: none;
+}
+.reval a {
+    color: black;
+}
+
+.reveal section[data-background] h2, .reveal section[data-background] h1 {
+    color: white;
+    text-shadow: 0 0 5px rgba(51,51,51,.4);
+}
+.reveal dl {
+    width: 90%;
+    margin: 0 auto;
+    text-align: left;
+    clear: both;
+}
+.reveal dt, .reveal dd {
+    float: left;
+    line-height: 1.5;
+}
+.reveal dt {
+    clear: left;
+    width: 20%;
+    min-width: 250px;
+    text-align: left;
+    border-right: 1px solid black;
+}
+.reveal dd {
+    text-indent: 20px;
+}
+
+.reveal table {
+    font-size: 0.7em;
+}
+.reveal table thead {
+    background: #ccc;
+    font-weight: bold;
+}
+.reveal table tbody {
+}
+.reveal table tfoot {
+    background: #333;
+    color: white;
+    
+}
+.reveal table td {
+    padding-left: 10px;
+}

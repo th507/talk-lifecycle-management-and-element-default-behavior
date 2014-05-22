@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+<meta charset="utf-8">
+
+<title>生命周期管理和元素默认行为</title>
+
+<meta name="description" content="{}">
+<meta name="author" content="Jingwei Liu">
+
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<link rel="stylesheet" href="css/reveal.min.css">
+<link rel="stylesheet" href="css/theme/beige.css" id="theme">
+<link rel="stylesheet" href="css/theme/me.css" id="theme">
+
+<!-- For syntax highlighting -->
+<link rel="stylesheet" href="lib/css/zenburn.css">
+<style>
+.reveal pre {
+    font-weight: 200;
+    font-family: Source Code Pro, Menlo, Monaco, monospace;
+}
+</style>
+
+<link rel="stylesheet" href="css/print/pdf.css" type="text/css" media="print">
+
+<!--[if lt IE 9]>
+<script src="lib/js/html5shiv.js"></script>
+<![endif]-->
+</head>
+
+<body>
+
+<div class="reveal">
+    <!-- Any section element inside of this container is displayed as a slide -->
+    <div class="slides">
+        <section class="first-slide" data-background="img/meituan.png">
+            <!--h1 style="float: left"><img src="img/icon@2x.png" width="200"></h1-->
+            <h3>生命周期管理和元素默认行为</h3>
+            <h6>及其内部实现</h6>
+            <p>
+            <small>by <b><a href="http://ljw.me">Jingwei Liu</a></b> (<a href="https://twitter.com/th507">@th507</a>), <a href="http://meituan.com">Meituan.com</a></small>
+            </p>
+        </section>
+
+        <section>
+            <h2>现状：冗余JS代码多</h2>
+        </section>
+
+        <section>
+            <h2>可以抽象、封装的的代码</h2>
+            <img src="img/tiny-js.png">
+            <p>异步请求回来直接插入节点</p>
+        </section>
+
+        <section>
+            <h2>选择器，到处都是选择器！</h2>
+            <img src="img/selector-demo.png">
+            <p>删除、修改元素的时候需要人工确认调用关系</p>
+        </section>
+
+        <section>
+            <h2>组件化，足够吗？</h2>
+            <p>组件化是一个非常好的尝试，它制定了一套简单的规则。</p>
+            <p>把元素对应的 JS, CSS 放到一起，提供基本的初始化功能。</p>
+            <crimson>但也有可以改进的地方</crimson>
+        </section>
+
+        <section>
+            <h2>元素：启动时机各不同</h2>
+            <ul>
+                <li>load 之后</li>
+                <li>onhover</li>
+                <li>onscroll</li>
+                ...
+            </ul>
+
+            <br><br>
+            <p>现在一般会函数的 init 方法里面处理启动时机</p>
+            <p>或者在页面上/另一个模块的事件回调里面初始化 </p>
+            <crimson>怎么统一管理？</crimson>
+        </section>
+
+        <section>
+            <h2>提供接口/配置项？</h2>
+            <p>提供一系列 on[] 型的接口/配置项？</p>
+            <ul>
+                <li>onscroll</li>
+                <li>onafterload</li>
+                <li>onhover</li>
+            </ul>
+
+            <br>
+            <p>管理器需要实现一系列接口，每个接口对应一个内部队列</p>
+            <p>被管理的子模块需要知道管理器的接口列表。</p>
+            <p>手工初始化比较繁复</p>
+        </section>
+
+        <section>
+            <h2>比方说</h2>
+            <img src="img/login.png" style="max-width: 30%; float: left;">
+            
+            <pre style="float:left; width: 70%;"><code class="javascript">// 注册初始化函数
+Y.mt.ComponentHub.attach('login-section', function (nd, params) {
+    Y.mt.www.Login.init(params);
+});</code></pre>
+
+        <pre style="float:left; width: 70%;"><code class="javascript">// AJAX插入后手工初始化，并注册回调函数
+Y.mt.ComponentHub.boot(ndDialog, {
+    'login-section': handleBooted
+});</code></pre>
+
+        <br style="clear:both">
+        <p>需要写的代码还是不少</p>
+        <p>注册回调和初始化应该分离</p>
+        </section>
+
+
+        <section>
+            <h2>组件化：更进一步？</h2>
+            <p>减少需要写的代码</p>
+            <p>减少组件化的对外接口</p>
+            <p>处理不同的启动时机</p>
+        </section>
+
+        <section>
+            <h2>怎么改进</h2>
+            <p>看看浏览器怎么处理的</p>
+        </section>
+
+        <section data-background="img/225121.png" data-background-transition="slide">
+            <h2>一张图片插入 DOM 的时候到底发生了什么？</h2>
+        </section>
+
+        <!--section>
+            <img src="img/loader-diagram.svg">
+        </section-->
+
+        <section>
+            <h2>图片加载的默认行为</h2>
+            <ul spread>
+                <li>扫描、收集需要下载的资源</li>
+                <li>按下载优先级排序，等待可用连接</li>
+                <li>下载</li>
+                <li>渲染 data</li>
+                <li>展现</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>元素也可以有默认行为</h2>
+        </section>
+
+        <section>
+            <h2>元素的默认行为</h2>
+            <ul spread>
+                <div class="fragment component">
+                <li>scan: 扫描，收集</li>
+                <li>scan: 下载CSS/JS<small>（可选）</small></li>
+                <li>render: 展现／渲染到页面中<small>（可选）</small></li>
+                <li>setup/init: 运行JS模块中的方法，绑定事件<small>（可选）</small></li>
+                </div>
+                
+                <li>beforeupdate: 准备AJAX更新数据<small>（可选）</small></li>
+                <li>update: 发送AJAX请求，并处理返回结果<small>（可选）</small></li>
+                <li>teardown: 元素销毁，事件解绑<small>（可选）</small></li>
+            </ul>
+
+            <br><br>
+            <p crimson class="fragment">我们可以接管元素整个生命周期。</p>
+        </section>
+
+        <section>
+            <h2>更明确的职能 = 更短的函数</h2>
+            <br>
+            <dl cf small>
+                <dt>scan</dt>
+                <dd>加载 JS 和 CSS</dd>
+                <dt>render</dt>
+                <dd>元素展现：lazyRender，模版引擎等</small></dd>
+                <dt>init(setup)</dt>
+                <dd>运行对应 JS 的 init 方法：事件绑定</dd>
+                <dt>beforeupdate</dt>
+                <dd>准备 AJAX 请求的数据</dd>
+                <dt>update</dt>
+                <dd>处理 AJAX 返回的数据</dd>
+            </dl>
+        </section>
+
+        <section>
+            <h2>更明确的职能 = 更短的函数</h2>
+            
+            <br>
+            <dl cf small>
+                <dt>scan<br>
+                render<br>
+                init(setup)<br>
+                beforeupdate<br>
+                update</dt>
+                <dd><p crimson>提供默认函数（行为）</p>
+                <p>不再把所有函数都写到 init 里</p>
+                <p>需要可覆盖特定默认行为</span>
+                </dd>
+            </dl>
+        </section>
+
+        <section>
+            <h2>默认行为/完整生命周期</h2>
+            <pre><code class="javascript">var defaultScope = {
+    render: function(ndElement) {
+        var ndContent = ndElement.one("> textarea[rel='lazyrender']");
+        if (ndContent) ndElement.setHTML(ndContent.get('value'));
+        ndContent = null;
+        ndElement.show();
+    },
+    // initialization: setup and event delegation
+    init: function (ndElement, config) {},
+    // add post/get data before sending AJAX requests
+    beforeupdate: function (url, config) {
+        if (!url) return null;
+        var _config = config || {};
+        if (!Y.Lang.isObject(_config)) _config = { args: config };
+        return Y.merge(_config, { act: url});
+    },
+    // update DOM with AJAX return values
+    update: function (ndElement, value, config) {
+        if (value && ndElement) ndElement.setHTML(value);
+    },
+    // when element is about to be destroyed
+    teardown: function (ndElement) {
+        if (!ndElement) return;
+        // remove all event listener
+        // on ndElement and its descendents
+        ndElement.purge(true);
+    }
+};</code></pre>
+        </section>
+
+        <section>
+            <h2>抽象默认行为<br>允许覆盖</h2>
+            <p>减少代码量，提高开发效率</p>
+        </section>
+
+        <section>
+            <h2>参数说明</h2>
+            <pre><code class="html">
+&lt;div class="J-hub"
+     data-hubmodule="www-deal-firstscreen" 
+     data-huburl="/deal/dynamicomponenent" 
+     data-hubconfig="{id: 1223, isMobileOnly: false}"&gt;...&lt;/div&gt;
+            </code></pre>
+            <br>
+            <dl cf small>
+                <dt>hubcss</dt>
+                <dd>CSS 地址</dd>
+
+                <dt>hubmodule</dt>
+                <dd>JS 模块名称</dd>
+                <dt>hubnamespace</dt>
+                <dd>JS 命名空间</dd>
+                <dt>huburl</dt>
+                <dd>AJAX 请求地址</dd>
+                <dt>hubconfig</dt>
+                <dd>JS 需要的额外参数</dd>
+            </dl>
+        </section>
+
+        <section>
+            <h2>例子</h2>
+            <pre><code class="html">
+&lt;div class="J-hub" 
+     data-huburl="deal/toprecommend" 
+     data-hubconfig="3638724"&gt;&lt;/div&gt;
+            </code></pre>
+
+            <small>
+            <ol spread>
+                <li>没有找到 JS 模块信息</li>
+                <li>没有找到命名空间，使用默认元素行为</li>
+                <li>执行默认的 render 函数</li>
+                
+                <li>执行默认的 init (空函数)</li>
+                <li>执行默认的 beforeupdate 得到需要发送AJAX的数据</li>
+                <li>发送 AJAX 请求 /deal/toprecommend/3638724</li>
+                <li>执行默认的 update，将返回的数据直接填入该节点</li>
+            </ol>
+            </small>
+
+            <crimson>不需要一行 JS</crimson>
+        </section>
+
+        <section>
+            <h2>例子</h2>
+            <pre><code class="html">
+&lt;div class="J-hub" 
+     data-hubmodule="cate-nav"
+     data-hubcss="www/css/cate-nav.css"&gt;&lt;/div&gt;
+            </code></pre>
+
+            <small>
+            <ol spread>
+                <li>找到模块，调用 Y.use("cate-nav")</li>
+                <li>加载 CSS</li>
+                <li>JS 和 CSS 加载完成之后…</li>
+                <li>找到命名空间：scope = Y.mt.www.CateNav</li>
+                <li>没有找到 scope.render，执行默认的render函数</li>
+                <li>执行 scope.init</li>
+            </ol>
+            </small>
+
+            <crimson>不需要人工初始化</crimson>
+        </section>
+
+        <section>
+            <h2>例子</h2>
+            <pre><code class="html">
+&lt;div class="J-hub"
+     data-hubmodule="www-deal-firstscreen" 
+     data-huburl="/deal/dynamicomponenent" 
+     data-hubconfig="{id: 1223, isMobileOnly: false}"&gt;...&lt;/div&gt;
+            </code></pre>
+
+            <small>
+            <ol spread>
+                <li>找到模块，调用 Y.use("www-deal-firstscreen")，在回调函数中…</li>
+                <li>找到命名空间：scope = Y.mt.www.DealFirstscreen</li>
+                <li>没有找到 scope.render，执行默认的render函数</li>
+                
+                <li>执行 scope.init</li>
+                <li>执行 scope.beforeupdate 得到需要发送AJAX的数据</li>
+                <li>检查是否需要更新，如有，发送 AJAX 请求</li>
+                <li>执行 scope.update 处理服务器端返回的数据</li>
+            </ol>
+            </small>
+        </section>
+
+
+        <section>
+            <h2>暂停和继续</h2>
+            <p>每个元素可以自行控制生命周期</p>
+        </section>
+
+        <section>
+            <h2>暂停和继续</h2>
+            <ul>
+                <li>懒加载其实就是在 scan 之前 pause，load 之后 resume</li>
+                <li>lazyDisplay是在 render 之前 pause，load 之后 resume</li>
+                <li>onscroll更新是在 init 的时候 pause，onscroll 之后 resume</li>
+                <li>load之后更新是在 init 的时候 pause，load 之后 resume</li>
+            ...
+            </ul>
+            <br><br>
+            <div style="text-align: left">
+            <crimson>一个接口就够了</crimson>
+            <p>而且任何时候重启都可以，由模块自己控制</p>
+            </div>
+        </section>
+
+        <section>
+            <h2>例子</h2>
+            <pre><code class="html">&lt;div class="site-sidebar J-hub" 
+     data-hubmodule="www-search" 
+     data-hubnamespace="search.sidebar" 
+     data-hubconfig="&lt;?php echo htmlspecialchars($keyword); ?&gt;" 
+     data-huburl="search/sidebar"&gt;
+&lt;/div&gt;</code></pre>
+
+            <small>
+            <ol spread>
+                <li>Y.use("www-search"); 找到命名空间 scope = Y.mt.www.search.sidebar</li>
+                <li>执行默认的 render 函数</li>
+                
+                <li>执行 scope.init，发现 ndContainer.fire("hub:pause");</li>
+                <li>暂停元素的剩余行为</li>
+                <li>执行 M.loadQueue.push 中的 ndContainer.fire("hub:resume")</li>
+                <li>重新开始执行元素的剩余行为</li>
+                <li>执行默认的 beforeupdate 得到需要发送AJAX的数据</li>
+                <li>发送 AJAX 请求 /search/sidebar/</li>
+                <li>执行默认的 update，将返回的数据直接填入该节点</li>
+            </ol>
+            </small>
+        </section>
+
+        <section>
+            <h2>很快就可以…</h2>
+            <p>有了默认行为，用模版引擎就变得很简单了：</p><br>
+            <ul cf>
+                <li>在元素中写入模版，数据写到节点 attribute 上</li>
+                <li>节点默认隐藏，由 render 函数填充节点内容，然后显示</li>
+                <li>异步请求只返回数据，用 update 函数更新模版</li>
+            </ul>
+
+            <br><br>
+            <crimson>不需要开发者在 JS 中手工调用模版引擎</crimson>
+        </section>
+
+        <section data-background="img/225121.png" data-background-transition="zoom">
+            <h1>幕间休息</h1>
+        </section>
+
+        <section>
+            <h2>谈谈内部实现</h2>
+        </section>
+        
+
+        <!--section data-background="#fff">
+            <img src="img/What-Went-Wrong.jpg" alt="What weng wrong?">
+            <span style="color:#aaa;font-size:12px;">http://watchdogwire.com/florida/2013/08/26/book-review-what-went-wrong-by-jerome-corsi/</span>
+        </section-->
+
+        <section>
+            <h2>组件化的缺点</h2>
+            <p><b>粗放式的加载</b>：每个组件的加载都是独立的。<br>
+            <small>n 个组件，意味着 n 个 CSS 请求，n 个 JS 请求，可能还有 n 个异步请求</small></p>
+
+            <p><b>启动方式单一</b>：自定义启动时机比较复杂
+            <small>自定义启动需要手工启动，或传入配置项＋Component 支持</small></p>
+        </section>
+
+        <section>
+            <h2>组件化：更进一步？</h2>
+            <p>减少需要写的代码</p>            
+            <p>减少组件化的对外接口</p>
+            <p>性能优化：无论加载多少组件，性能不会有大的起伏</p>
+            <p>处理不同的启动时机</p>
+            <p>各个组件之间通讯比较麻烦</p>            
+        </section>
+
+        <section>
+            <h3>生命周期管理和元素默认行为</h3>
+            <b>组件化 2.0</b><br><br>
+            <p>n 个组件，1 个 CSS 请求，1 个 JS 请求，1 个异步请求</p>
+            <p>对外没有函数接口，通过事件通信</p>
+            <p>内部只维护一个队列，但支持各元素按需启动</p>
+            <p>任何时刻插入 DOM 节点的组件会自动初始化</p>
+        </section>
+
+        <section>
+            <h2>Before</h2>
+            <img src="img/login.png" style="max-width: 30%; float: left;">
+            
+            <pre style="float:left; width: 70%;"><code class="javascript">// 注册初始化函数
+Y.mt.ComponentHub.attach('login-section', function (nd, params) {
+    Y.mt.www.Login.init(params);
+});</code></pre>
+
+        <pre style="float:left; width: 70%;"><code class="javascript">// AJAX插入后手工初始化，并注册回调函数
+Y.mt.ComponentHub.boot(ndDialog, {
+    'login-section': handleBooted
+});</code></pre>
+        </section>
+
+        <section>
+            <h2>After</h2>
+            <img src="img/login.png" style="max-width: 30%; float: left;">
+            
+            <pre style="float:left; width: 70%;"><code class="javascript">// 注册初始化函数：不需要
+</code></pre>
+
+            <pre style="float:left; width: 70%;"><code class="javascript">// AJAX插入后手工初始化：不需要
+</code></pre>
+
+        <pre style="float:left; width: 70%;"><code class="javascript">// 注册回调函数
+Y.one('.login-section').on("hub:ready", handleBooted);</code></pre>
+        </section>
+
+        <section>
+            <h2>默认行为和生命周期管理</h2>
+            <p>Introducing Hub</p>
+        </section>
+
+        <section>
+            <h3>名词解释</h3>
+            <dl cf>
+                <dt>Document</dt>
+                <dd>页面</dd>
+                <dt>Hub</dt>
+                <dd>生命周期管理器</dd>
+                <dt>Pod</dt>
+                <dd>元素和相关事件的封装</dd>
+                <dt>Element</dt>
+                <dd>元素</dd>
+            </dl>
+        </section>
+
+        <section>
+            <h2>回顾：元素的默认行为</h2>
+            <dl cf small>
+                <dt>scan</dt>
+                <dd>加载 JS 和 CSS</dd>
+                <dt>render</dt>
+                <dd>元素展现：lazyRender，模版引擎等</small></dd>
+                <dt>init(setup)</dt>
+                <dd>运行对应 JS 的 init 方法：事件绑定</dd>
+                <dt>beforeupdate</dt>
+                <dd>准备 AJAX 请求的数据</dd>
+                <dt>update</dt>
+                <dd>处理 AJAX 返回的数据</dd>
+            </dl>
+        </section>
+
+        <section>
+            <h2>默认行为</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <td>默认行为</td>
+                        <td>Hub</td>
+                        <td>Pod</td>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>scan</td>
+                        <td>分发事件，收集、加载所有 JS 和 CSS</td>
+                        <td>上报元素需要的 JS 和 CSS</td>
+                    </tr>
+                    <tr>
+                        <td>render</td>
+                        <td>分发 Pod 进行 render</td>
+                        <td>渲染/展现元素</td>
+                    </tr>
+                    <tr>
+                        <td>init</td>
+                        <td>分发 Pod 进行 init</td>
+                        <td>运行对应模块或默认的 init</td>
+                    </tr>
+                    <tr>
+                        <td>beforeupdate</td>
+                        <td>分发事件，收集异步请求</td>
+                        <td>准备、并上报异步请求数据</td>
+                    </tr>
+                    <tr>
+                        <td>update</td>
+                        <td>发送请求，分发结果到对应 Pod</td>
+                        <td>处理元素的更新，上报完成</td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td>主要分工</td>
+                        <td>分发事件到每个 Pod<br>收集返回值</td>
+                        <td>处理对应元素的相关行为<br>上报相关的数据（如需要）</td>
+                    </tr>
+
+                </tfoot>
+            </table>
+        </section>
+
+        <section>
+            <h3>内部分层</h3>
+            <img src="img/lifecycle.png">
+        </section>
+
+        <section>
+            <h2>生命周期流水线</h2>
+            <img src="img/hub.png">
+        </section>
+
+        <section>
+            <h2>生命周期流水线</h2>
+            <ul>
+                <li>内部利用事件通讯，利用 Promise 管理异步队列</li>
+                <li>元素默认行为写到 Pod 事件的 defaultFn 中</li>
+                <li>Pod 接受到 Hub 事件的时候，会检查一下是否暂停</li>
+                <li>暂停会导致 e.preventDefault()，从而跳过该元素的启动流程</li>
+                <li>但不影响其他元素的启动</li>
+                <li>在元素上记录该节点的 state ，下次启动时候从该状态开始</li>      
+                <li>在元素上fire resume，会导致 Pod.fire("resume")</li>
+                <li>冒泡到 Hub，Hub会在当前lifecycle完成之后重新走一遍流水线</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>生命周期流水线</h2>
+            <img src="img/hub.png">
+        </section>
+
+        <section>
+            <h2>一些细节</h2>
+        </section>
+
+        <section>
+            <h2>scan</h2>
+            <img src="img/hub-scan.png" style="float:left; max-width: 80%;">
+            <p>合并请求</p>
+            <p>同时下载 CSS 和 JS</p>
+            <p>提高网络利用效率</p>
+            <p>不会重复下载</p>
+        </section>
+
+        <section>
+            <h2>update</h2>
+            <img src="img/hub-update.png" style="float:left; max-width: 80%;">
+            <p>合并异步请求</p>
+            <p>完成后触发 ready 事件</p>
+            <p>接受回调</p>
+        </section>
+
+        <section>
+            <h2>事件通讯</h2>
+            <img src="img/hub.png" style="max-height: 400px">            
+            <p>上层对下层分发事件</p>
+            <p>下层完全不知道上层的代码结构<br>需要通讯的时候在自身上 fire 事件<br>这些事件会冒泡到上层</p>
+        </section>
+
+        <section>
+            <h2>参考了 actor 模型</h2>
+            <div style="text-align:left">
+            <p>页面和 Hub，Hub 和 Pod，Pod 和元素之间只有发送消息这一种通信方式，消息让各层之间解耦。</p>
+            <p>外部不能直接调用对象的行为，这样就保证内部数据只有被自己修改。</p>
+            <p>加上 Promise 可保证生命周期的执行顺序。从而支持任意时刻 pause/resume</p>
+            </div>
+        </section>
+
+        <section>
+            <h2>pause/resume</h2>
+            <img src="img/lifecycle.png" style="max-height: 400px">            
+            <p>直接在元素上 fire 即可，Pod 接管后冒泡到 Hub<br>Hub 在当前周期结束之后 re-run</p>
+            <crimson>下层不需要知道上层的代码结构</crimson>
+        </section>
+
+
+        <section>
+            <h2>参考阅读</h2>
+            <ul>
+                <li><a href="//git.sankuai.com/projects/FE/repos/fe.core/pull-requests/159/overview">这次的 pull request</a></li>
+                <li><a href="//yuilibrary.com/yui/docs/widget/">YUI Widget 的生命周期</a></li>
+                <li><a href="//yuilibrary.com/yui/docs/event-custom/">YUI Custom Event</a></li>
+                <li><a href="//github.com/ftlabs/fruitmachine">FruitMachine：一个优秀的迷你框架</a></li>
+                <li><a href="//yuilibrary.com/yui/docs/promise/">YUI Promise</a></li>
+                <li><a href="//github.com/kriskowal/q">Q：代码质量很高、注释详尽的 Promise 实现</a></li>
+                <li><a href="//github.com/th507/asyncjs">AsyncJS：我写的一个类 Promise 实现</a></li>
+            </ul>
+        </section>
+
+        <section data-background="img/fancy-bg.png" data-background-transition="slide">
+            <h2>Thanks!</h2>
+        </section>
+
+    </div>
+
+</div>
+
+<script src="lib/js/head.min.js"></script>
+<script src="js/reveal.min.js"></script>
+
+<script>
+
+    // Full list of configuration options available here:
+    // https://github.com/hakimel/reveal.js#configuration
+    Reveal.initialize({
+        controls: false,
+        progress: true,
+        history: true,
+        center: true,
+
+        theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+        transition: Reveal.getQueryHash().transition || 'linear', // default/cube/page/concave/zoom/linear/fade/none
+
+        // Parallax scrolling
+        // parallaxBackgroundImage: 'https://s3.amazonaws.com/hakim-static/reveal-js/reveal-parallax-1.jpg',
+        // parallaxBackgroundSize: '2100px 900px',
+
+        // Optional libraries used to extend on reveal.js
+        dependencies: [
+            { src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+            { src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+            { src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+            { src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+            { src: 'plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+            { src: 'plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+        ]
+    });
+
+</script>
+
+</body>
+</html>
